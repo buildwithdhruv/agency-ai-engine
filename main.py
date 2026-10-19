@@ -153,3 +153,43 @@ async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
         "metric_count": len(metric_rows),
         "status": "File ingested and metrics saved.",
     }
+
+
+@app.get("/reports/{report_id}")
+def get_report(report_id: int, db: Session = Depends(get_db)):
+    """Fetch a single report and all of its metrics.
+
+    Path params:
+        report_id: Numeric ID of the report (returned by POST /upload-csv/).
+
+    Returns 404 if no report with that ID exists.
+    """
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if report is None:
+        raise HTTPException(
+            status_code=404, detail=f"Report with id {report_id} not found."
+        )
+
+    metrics = (
+        db.query(Metric).filter(Metric.report_id == report_id).order_by(Metric.date).all()
+    )
+
+    return {
+        "report_id": report.id,
+        "client_id": report.client_id,
+        "original_filename": report.original_filename,
+        "unique_filename": report.unique_filename,
+        "metric_count": len(metrics),
+        "metrics": [
+            {
+                "id": metric.id,
+                "date": metric.date.isoformat() if metric.date else None,
+                "campaign_name": metric.campaign_name,
+                "impressions": metric.impressions,
+                "clicks": metric.clicks,
+                "spend": metric.spend,
+                "conversions": metric.conversions,
+            }
+            for metric in metrics
+        ],
+    }
